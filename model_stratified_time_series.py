@@ -5,7 +5,7 @@ import math
 import sklearn
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import accuracy_score, fbeta_score
+from sklearn.metrics import accuracy_score, fbeta_score, precision_recall_curve, average_precision_score
 import matplotlib.pyplot as plt
 
 print("scikit-learn version: {}".format(sklearn.__version__))
@@ -90,6 +90,7 @@ features = pd.Index([' Destination Port', ' Flow Duration', ' Total Fwd Packets'
                      ' min_seg_size_forward', 'Active Mean', ' Active Std', ' Active Max',
                      ' Active Min', 'Idle Mean', ' Idle Std', ' Idle Max', ' Idle Min'])
 
+print("Stratifing data")
 b1 = df[df[' Label'] == 'BENIGN']
 range1 = math.trunc(len(b1)/file_number)
 b2 = df[df[' Label'] == 'PortScan']
@@ -98,19 +99,19 @@ b3 = df[df[' Label'] == 'Patator']
 range3 = math.trunc(len(b3)/file_number)
 b4 = df[df[' Label'] == 'Brute Force']
 range4 = math.trunc(len(b4)/file_number)
-print("\nStratifing data\n")
 new_df = pd.DataFrame()
 for i in range(file_number):
     new_df = pd.concat([new_df, b1[i * range1: i * range1 + range1]])
     new_df = pd.concat([new_df, b2[i * range2: i * range2 + range2]])
     new_df = pd.concat([new_df, b3[i * range3: i * range3 + range3]])
     new_df = pd.concat([new_df, b4[i * range4: i * range4 + range4]])
+print("Finish stratifing data")
 
 
 class ConfusionMatrix(object):
+    # micro average
     def getMultiPR(self, pred, target_data):
         tp = 0  # true positives
-        tn = 0  # true negatives
         fp = 0  # false positive
         fn = 0  # false negatives
         for i in range(len(pred)):
@@ -120,26 +121,21 @@ class ConfusionMatrix(object):
                 fp += 1
             if pred[i] == 'BENIGN' and target_data.iloc[i] != pred[i]:  # False negative
                 fn += 1
-            if pred[i] == 'BENIGN' and target_data.iloc[i] == 'BENIGN':  # True negative
-                tn += 1
         precision = tp / (tp + fp)
         recall = tp / (tp + fn)
         return [precision, recall]
 
-    def getBinaryPR(self, pred, target_data, malicious, benign):
+    def getBinaryPR(self, pred, target_data, malicious):
         tp = 0  # true positives
-        tn = 0  # true negatives
         fp = 0  # false positive
         fn = 0  # false negatives
         for i in range(len(pred)):
             if pred[i] == malicious and target_data.iloc[i] == malicious:  # True positive
                 tp += 1
-            if pred[i] == malicious and target_data.iloc[i] == benign:  # False positive
+            if pred[i] == malicious and target_data.iloc[i] != malicious:  # False positive
                 fp += 1
-            if pred[i] == benign and target_data.iloc[i] == malicious:  # False negative
+            if pred[i] != malicious and target_data.iloc[i] == malicious:  # False negative
                 fn += 1
-            if pred[i] == benign and target_data.iloc[i] == benign:  # True negative
-                tn += 1
         precision = tp / (tp + fp)
         recall = tp / (tp + fn)
         return [precision, recall]
@@ -160,53 +156,50 @@ accuracy_scores1 = []
 f1_scores1 = []
 p1 = []
 r1 = []
-p_port = []
-r_port = []
-p_patator = []
-r_patator = []
-p_brute = []
-r_brute = []
+labels = ['PortScan', 'Patator', 'Brute Force']
+p2 = [[] for i in range(len(labels))]
+r2 = [[] for i in range(len(labels))]
 count_1 = []
 count1 = 0
+multi_model = RandomForestClassifier(n_jobs=-2)
+
+print("Stratified time series cross validation for the multiclass model:")
 for train_index, test_index in tscv.split(X):
     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
     y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-    multi_model = RandomForestClassifier(n_jobs=-2)
     multi_model.fit(X_train, y_train)
     y_pred = multi_model.predict(X_test)
+    p = 0
+    r = 0
+    for i in range(len(labels)):
+        pr = cM.getBinaryPR(y_pred, y_test, labels[i])
+        p2[i].append(pr[0])
+        r2[i].append(pr[1])
+        p = p + pr[0]
+        r = r + pr[1]
+    p1.append(p/3)
+    r1.append(r/3)
     count1 = count1 + 1
-    pr1 = cM.getMultiPR(y_pred, y_test)
-    p1.append(pr1[0])
-    r1.append(pr1[1])
-    pr2 = cM.getBinaryPR(y_pred, y_test, 'PortScan', 'BENIGN')
-    p_port.append(pr2[0])
-    r_port.append(pr2[1])
-    pr3 = cM.getBinaryPR(y_pred, y_test, 'Patator', 'BENIGN')
-    p_patator.append(pr3[0])
-    r_patator.append(pr3[1])
-    pr4 = cM.getBinaryPR(y_pred, y_test, 'Brute Force', 'BENIGN')
-    p_brute.append(pr4[0])
-    r_brute.append(pr4[1])
     count_1.append(count1)
     accuracy_scores1.append(accuracy_score(y_test, y_pred))
     f1_scores1.append(fbeta_score(y_test, y_pred, average='macro', beta=1.0))
 
 plt.subplot(2, 2, 1)
+r1, p1 = zip(*sorted(zip(r1, p1)))
+plt.plot(r1, p1, label="Overall")
+for i in range(len(labels)):
+    r2[i], p2[i] = zip(*sorted(zip(r2[i], p2[i])))
+    plt.plot(r2[i], p2[i], label=labels[i])
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.legend()
+plt.title('Multiclass Classifier')
+plt.subplot(2, 2, 2)
 plt.plot(count_1, accuracy_scores1, label="accuracy")
 plt.plot(count_1, f1_scores1, label="f1")
 plt.xlabel("Test Fold")
 plt.legend()
 plt.title('Multiclass Classifier')
-plt.subplot(2, 2, 2)
-plt.plot(r1, p1, label="Overall")
-plt.plot(r_port, p_port, label="PortScan")
-plt.plot(r_patator, p_patator, label="Patator")
-plt.plot(r_brute, p_brute, label="Brute Force")
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.legend()
-plt.title('Multiclass Classifier')
-print("After time series cross validation for the multiclass model:\n")
 print(" Accuracy: {:3f}".format(sum(accuracy_scores1)/len(accuracy_scores1)))
 print(" F1-score: {:3f}".format(sum(f1_scores1)/len(f1_scores1)))
 
@@ -217,42 +210,57 @@ tscv2 = TimeSeriesSplit(n_splits=file_number-1,
                         test_size=round(len(new_df)/file_number))
 accuracy_scores2 = []
 f1_scores2 = []
-p2 = []
-r2 = []
+y_real2 = []
+y_proba2 = []
 count_2 = []
 count2 = 0
+binary_model = RandomForestClassifier(n_jobs=-2)
+
+plt.subplot(2, 2, 3)
+print("Stratified time series cross validation for the binary model:")
 for train_index, test_index in tscv2.split(X):
     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
     y_train, y_test = y_binary.iloc[train_index], y_binary.iloc[test_index]
-    binary_model = RandomForestClassifier(n_jobs=-2)
     binary_model.fit(X_train, y_train)
     y_pred = binary_model.predict(X_test)
-    pr = cM.getBinaryPR(y_pred, y_test, 'Malicious', 'Benign')
-    p2.append(pr[0])
-    r2.append(pr[1])
+    pred_proba = binary_model.predict_proba(X_test)
+    precision, recall, thresholds = precision_recall_curve(
+        y_test, pred_proba[:, 1], pos_label='Malicious')
+    plt.plot(recall, precision, lw=1, alpha=0.3,
+             label='PR fold %d (AUC = %0.2f)' % (count2, average_precision_score(y_test, pred_proba[:, 1], pos_label='Malicious')))
+    y_real2.append(y_test)
+    y_proba2.append(pred_proba[:, 1])
     count2 = count2 + 1
     count_2.append(count2)
     accuracy_scores2.append(accuracy_score(y_test, y_pred))
     f1_scores2.append(fbeta_score(y_test, y_pred, average='macro', beta=1.0))
-plt.subplot(2, 2, 3)
+
+y_real2 = np.concatenate(y_real2)
+y_proba2 = np.concatenate(y_proba2)
+precision2, recall2, _ = precision_recall_curve(
+    y_real2, y_proba2, pos_label='Malicious')
+plt.plot(recall2, precision2, color='b',
+         label=r'Precision-Recall (AUC = %0.2f)' % (
+             average_precision_score(y_real2, y_proba2, pos_label='Malicious')),
+         lw=2, alpha=.8)
+plt.xlim([-0.05, 1.05])
+plt.ylim([-0.05, 1.05])
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.legend()
+plt.title('Binary Classifier')
+plt.subplot(2, 2, 4)
 plt.plot(count_2, accuracy_scores2, label="accuracy")
 plt.plot(count_2, f1_scores2, label="f1")
 plt.xlabel("Test Fold")
 plt.legend()
 plt.title('Binary Classifier')
-plt.subplot(2, 2, 4)
-plt.plot(r2, p2)
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.legend()
-plt.title('Binary Classifier')
-print("\nAfter time series cross validation for the binary model:")
 print(" Accuracy: {:3f}".format(sum(accuracy_scores2)/len(accuracy_scores2)))
 print(" F1-score: {:3f}".format(sum(f1_scores2)/len(f1_scores2)))
+plt.suptitle("Stratified Time Series Cross Validation")
 plt.show()
 
-
-# Accuracy: 0.998966
-# F1-score: 0.984150
-# Accuracy: 0.998908
-# F1-score: 0.995886
+# Accuracy: 0.998979
+# F1-score: 0.985057
+# Accuracy: 0.998914
+# F1-score: 0.995909

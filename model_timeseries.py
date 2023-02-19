@@ -5,7 +5,7 @@ import math
 import sklearn
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import accuracy_score, fbeta_score
+from sklearn.metrics import accuracy_score, fbeta_score, precision_recall_curve, average_precision_score
 import matplotlib.pyplot as plt
 
 print("scikit-learn version: {}".format(sklearn.__version__))
@@ -92,9 +92,9 @@ features = pd.Index([' Destination Port', ' Flow Duration', ' Total Fwd Packets'
 
 
 class ConfusionMatrix(object):
+    # micro average
     def getMultiPR(self, pred, target_data):
         tp = 0  # true positives
-        tn = 0  # true negatives
         fp = 0  # false positive
         fn = 0  # false negatives
         for i in range(len(pred)):
@@ -104,32 +104,27 @@ class ConfusionMatrix(object):
                 fp += 1
             if pred[i] == 'BENIGN' and target_data.iloc[i] != pred[i]:  # False negative
                 fn += 1
-            if pred[i] == 'BENIGN' and target_data.iloc[i] == 'BENIGN':  # True negative
-                tn += 1
-        precision = 0
-        recall = 0
+        precision = 1
+        recall = 1
         if (tp + fp != 0):
             precision = tp / (tp + fp)
         if (tp + fn != 0):
             recall = tp / (tp + fn)
         return [precision, recall]
 
-    def getBinaryPR(self, pred, target_data, malicious, benign):
+    def getBinaryPR(self, pred, target_data, malicious):
         tp = 0  # true positives
-        tn = 0  # true negatives
         fp = 0  # false positive
         fn = 0  # false negatives
         for i in range(len(pred)):
             if pred[i] == malicious and target_data.iloc[i] == malicious:  # True positive
                 tp += 1
-            if pred[i] == malicious and target_data.iloc[i] == benign:  # False positive
+            if pred[i] == malicious and target_data.iloc[i] != malicious:  # False positive
                 fp += 1
-            if pred[i] == benign and target_data.iloc[i] == malicious:  # False negative
+            if pred[i] != malicious and target_data.iloc[i] == malicious:  # False negative
                 fn += 1
-            if pred[i] == benign and target_data.iloc[i] == benign:  # True negative
-                tn += 1
-        precision = 0
-        recall = 0
+        precision = 1
+        recall = 1
         if (tp + fp != 0):
             precision = tp / (tp + fp)
         if (tp + fn != 0):
@@ -147,53 +142,50 @@ accuracy_scores1 = []
 f1_scores1 = []
 p1 = []
 r1 = []
-p_port = []
-r_port = []
-p_patator = []
-r_patator = []
-p_brute = []
-r_brute = []
+labels = ['PortScan', 'Patator', 'Brute Force']
+p2 = [[] for i in range(len(labels))]
+r2 = [[] for i in range(len(labels))]
 count_1 = []
 count1 = 0
+multi_model = RandomForestClassifier(n_jobs=-2)
+
+print("Time series cross validation for the multiclass model:")
 for train_index, test_index in tscv.split(X):
     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
     y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-    multi_model = RandomForestClassifier(n_jobs=-2)
     multi_model.fit(X_train, y_train)
     y_pred = multi_model.predict(X_test)
+    p = 0
+    r = 0
+    for i in range(len(labels)):
+        pr = cM.getBinaryPR(y_pred, y_test, labels[i])
+        p2[i].append(pr[0])
+        r2[i].append(pr[1])
+        p = p + pr[0]
+        r = r + pr[1]
+    p1.append(p/3)
+    r1.append(r/3)
     count1 = count1 + 1
-    pr1 = cM.getMultiPR(y_pred, y_test)
-    p1.append(pr1[0])
-    r1.append(pr1[1])
-    pr2 = cM.getBinaryPR(y_pred, y_test, 'PortScan', 'BENIGN')
-    p_port.append(pr2[0])
-    r_port.append(pr2[1])
-    pr3 = cM.getBinaryPR(y_pred, y_test, 'Patator', 'BENIGN')
-    p_patator.append(pr3[0])
-    r_patator.append(pr3[1])
-    pr4 = cM.getBinaryPR(y_pred, y_test, 'Brute Force', 'BENIGN')
-    p_brute.append(pr4[0])
-    r_brute.append(pr4[1])
     count_1.append(count1)
     accuracy_scores1.append(accuracy_score(y_test, y_pred))
     f1_scores1.append(fbeta_score(y_test, y_pred, average='macro', beta=1.0))
 
 plt.subplot(2, 2, 1)
+r1, p1 = zip(*sorted(zip(r1, p1)))
+plt.plot(r1, p1, label="Overall")
+for i in range(len(labels)):
+    r2[i], p2[i] = zip(*sorted(zip(r2[i], p2[i])))
+    plt.plot(r2[i], p2[i], label=labels[i])
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.legend()
+plt.title('Multiclass Classifier')
+plt.subplot(2, 2, 2)
 plt.plot(count_1, accuracy_scores1, label="accuracy")
 plt.plot(count_1, f1_scores1, label="f1")
 plt.xlabel("Test Fold")
 plt.legend()
 plt.title('Multiclass Classifier')
-plt.subplot(2, 2, 2)
-plt.plot(r1, p1, label="Overall")
-plt.plot(r_port, p_port, label="PortScan")
-plt.plot(r_patator, p_patator, label="Patator")
-plt.plot(r_brute, p_brute, label="Brute Force")
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.legend()
-plt.title('Multiclass Classifier')
-print("After time series cross validation for the multiclass model:\n")
 print(" Accuracy: {:3f}".format(sum(accuracy_scores1)/len(accuracy_scores1)))
 print(" F1-score: {:3f}".format(sum(f1_scores1)/len(f1_scores1)))
 
@@ -204,38 +196,42 @@ tscv2 = TimeSeriesSplit(n_splits=file_number-1,
                         test_size=round(len(df)/file_number))
 accuracy_scores2 = []
 f1_scores2 = []
-p2 = []
-r2 = []
+p_2 = []
+r_2 = []
 count_2 = []
 count2 = 0
+binary_model = RandomForestClassifier(n_jobs=-2)
+
+print("Time series cross validation for the binary model:")
 for train_index, test_index in tscv2.split(X):
     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
     y_train, y_test = y_binary.iloc[train_index], y_binary.iloc[test_index]
-    binary_model = RandomForestClassifier(n_jobs=-2)
     binary_model.fit(X_train, y_train)
     y_pred = binary_model.predict(X_test)
-    pr = cM.getBinaryPR(y_pred, y_test, 'Malicious', 'Benign')
-    p2.append(pr[0])
-    r2.append(pr[1])
+    pr = cM.getBinaryPR(y_pred, y_test, 'Malicious')
+    p_2.append(pr[0])
+    r_2.append(pr[1])
     count2 = count2 + 1
     count_2.append(count2)
     accuracy_scores2.append(accuracy_score(y_test, y_pred))
     f1_scores2.append(fbeta_score(y_test, y_pred, average='macro', beta=1.0))
+
 plt.subplot(2, 2, 3)
+r_2, p_2 = zip(*sorted(zip(r_2, p_2)))
+plt.plot(r_2, p_2, label="Overall")
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.legend()
+plt.title('Binary Classifier')
+plt.subplot(2, 2, 4)
 plt.plot(count_2, accuracy_scores2, label="accuracy")
 plt.plot(count_2, f1_scores2, label="f1")
 plt.xlabel("Test Fold")
 plt.legend()
 plt.title('Binary Classifier')
-plt.subplot(2, 2, 4)
-plt.plot(r2, p2)
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.legend()
-plt.title('Binary Classifier')
-print("\nAfter time series cross validation for the binary model:")
 print(" Accuracy: {:3f}".format(sum(accuracy_scores2)/len(accuracy_scores2)))
 print(" F1-score: {:3f}".format(sum(f1_scores2)/len(f1_scores2)))
+plt.suptitle("Time Series Cross Validation")
 plt.show()
 
 

@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import os
-import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from functions import print_versions, sort_files, process_data, multiclass_cross_validation, plot_multiclass_results, binary_time_cross_validation, plot_binary_results, plot_cv

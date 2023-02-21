@@ -23,16 +23,19 @@ df = process_data(df)
 
 # Define the features used by the classifier
 features = df.columns[:-1]
+
 X = df[features]
 y = df['Label']
-
-print("Time series cross validation for the multiclass model")
-tscv = TimeSeriesSplit(n_splits=file_number-1,
-                       test_size=round(len(df)/file_number))
-# plot_cv(tscv, X, y, file_number-1, 'Time Series Split - Multiclass Classifier')
-
 labels = ['PortScan', 'Patator', 'Brute Force']
 multi_model = RandomForestClassifier(n_jobs=-2)
+
+tscv = TimeSeriesSplit(n_splits=file_number-1,
+                       test_size=round(len(df)/file_number))
+
+# print("Visualizing cross-validation behavior for the multiclass model")
+# plot_cv(tscv, X, y, file_number-1, 'Time Series Split - Multiclass Classifier')
+
+print("Time series cross validation for the multiclass model")
 results1 = multiclass_cross_validation(
     multi_model, tscv.split(X), X, y, labels)
 # [r1, p1, r2, p2, counts, accuracy_scores, f1_scores]
@@ -42,14 +45,16 @@ plot_multiclass_results(results1, labels, suptitle)
 
 df['GT'] = np.where(df['Label'] == 'BENIGN', 'Benign', 'Malicious')
 y_binary = df['GT']
+binary_model = RandomForestClassifier(n_jobs=-2)
 
-print("Time series cross validation for the binary model")
 tscv2 = TimeSeriesSplit(n_splits=file_number-1,
                         test_size=round(len(df)/file_number))
+
+# print("Visualizing cross-validation behavior for the binary model")
 # plot_cv(tscv2, X, y_binary, file_number-1,
 #         'Time Series Split - Binary Classifier')
 
-binary_model = RandomForestClassifier(n_jobs=-2)
+print("Time series cross validation for the binary model")
 results2 = binary_time_cross_validation(
     binary_model, tscv2.split(X), X, y_binary)
 # [r, p, counts, accuracy_scores, f1_scores]

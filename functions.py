@@ -16,6 +16,7 @@ def print_versions():
     print("NumPy version: {}".format(np.__version__))
 
 
+# Append files in time order
 def sort_files(f):
     if (f.split("-")[0] == "Monday"):
         return 0
@@ -50,6 +51,8 @@ def process_data(df):
     return df
 
 
+# Stratifing data: split the data into 'file_number' folds,
+#   each file contains same amount of different data with the same label
 def generate_new_df(df, file_number):
     print("Stratifing data")
     b1 = df[df['Label'] == 'BENIGN']
@@ -70,7 +73,7 @@ def generate_new_df(df, file_number):
     return new_df
 
 
-# micro average
+# Calculate the precision and recall - micro average
 def getMultiPR(pred, target_data):
     tp = 0  # true positives
     fp = 0  # false positive
@@ -91,6 +94,7 @@ def getMultiPR(pred, target_data):
     return [precision, recall]
 
 
+# Calculate the precision and recall - macro average
 def getBinaryPR(pred, target_data, malicious):
     tp = 0  # true positives
     fp = 0  # false positive
@@ -147,6 +151,34 @@ def multiclass_cross_validation(multi_model, split, X, y, labels):
     return [r1, p1, r2, p2, counts, accuracy_scores, f1_scores]
 
 
+def plot_multiclass_results(results, labels, suptitle):
+    # results = [r1, p1, r2, p2, counts, accuracy_scores, f1_scores]
+
+    # Plot the average precision-recall curve
+    r1, p1 = zip(*sorted(zip(results[0], results[1])))
+    plt.plot(r1, p1, label="Overall")
+    for i in range(len(labels)):
+        results[2][i], results[3][i] = zip(
+            *sorted(zip(results[2][i], results[3][i])))
+        plt.plot(results[2][i], results[3][i], label=labels[i])
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.legend()
+    plt.title(suptitle + ' - Multiclass Classifier')
+    plt.show()
+
+    # Plot the accuracy and f1 graph
+    plt.plot(results[4], results[5], label='Accuracy (AVG = {:3f})'.format(
+        sum(results[5])/len(results[5])))
+    plt.plot(results[4], results[6], label='F1 (AVG = {:3f})'.format(
+        sum(results[6])/len(results[6])))
+    plt.xlabel("Test Fold")
+    plt.legend()
+    plt.title(suptitle + ' - Multiclass Classifier')
+    plt.show()
+
+
+# For time series cross validation only
 def binary_time_cross_validation(binary_model, split, X, y_binary):
     accuracy_scores = []
     f1_scores = []
@@ -170,31 +202,10 @@ def binary_time_cross_validation(binary_model, split, X, y_binary):
     return [r, p, counts, accuracy_scores, f1_scores]
 
 
-def plot_multiclass_results(results, labels, suptitle):
-    # results = [r1, p1, r2, p2, counts, accuracy_scores, f1_scores]
-    r1, p1 = zip(*sorted(zip(results[0], results[1])))
-    plt.plot(r1, p1, label="Overall")
-    for i in range(len(labels)):
-        results[2][i], results[3][i] = zip(
-            *sorted(zip(results[2][i], results[3][i])))
-        plt.plot(results[2][i], results[3][i], label=labels[i])
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.legend()
-    plt.title(suptitle + ' - Multiclass Classifier')
-    plt.show()
-    plt.plot(results[4], results[5], label='Accuracy (AVG = {:3f})'.format(
-        sum(results[5])/len(results[5])))
-    plt.plot(results[4], results[6], label='F1 (AVG = {:3f})'.format(
-        sum(results[6])/len(results[6])))
-    plt.xlabel("Test Fold")
-    plt.legend()
-    plt.title(suptitle + ' - Multiclass Classifier')
-    plt.show()
-
-
 def plot_binary_results(results):
     # results = [r, p, counts, accuracy_scores, f1_scores]
+
+    # Plot the average precision-recall curve
     r, p = zip(*sorted(zip(results[0], results[1])))
     plt.plot(r, p, label="Overall")
     plt.xlabel('Recall')
@@ -202,6 +213,8 @@ def plot_binary_results(results):
     plt.legend()
     plt.title('Time Series Cross Validation - Binary Classifier')
     plt.show()
+
+    # Plot the accuracy and f1 graph
     plt.plot(results[2], results[3], label='Accuracy (AVG = {:3f})'.format(
         sum(results[3])/len(results[3])))
     plt.plot(results[2], results[4], label='F1 (AVG = {:3f})'.format(
@@ -219,6 +232,7 @@ def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
     y_proba = []
     counts = []
     count = 0
+    # Stratified cross validation
     for train_index, test_index in split:
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y_binary.iloc[train_index], y_binary.iloc[test_index]
@@ -237,6 +251,7 @@ def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
         f1_scores.append(fbeta_score(
             y_test, y_pred, average='macro', beta=1.0))
 
+    # Plot the average precision-recall curve
     y_real = np.concatenate(y_real)
     y_proba = np.concatenate(y_proba)
     precision, recall, _ = precision_recall_curve(
@@ -252,6 +267,8 @@ def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
     plt.legend()
     plt.title(suptitle + ' - Binary Classifier')
     plt.show()
+
+    # Plot the accuracy and f1 graph
     plt.plot(counts, accuracy_scores, label='Accuracy (AVG = {:3f})'.format(
         sum(accuracy_scores)/len(accuracy_scores)))
     plt.plot(counts, f1_scores, label='F1 (AVG = {:3f})'.format(
@@ -262,6 +279,7 @@ def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
     plt.show()
 
 
+# Visualizing cross-validation
 def plot_cv_indices(cv, X, y, ax, n_splits, title, cmap_cv):
     lw = 20
     # Generate the training/testing visualizations for each CV split
@@ -305,8 +323,8 @@ def plot_cv_indices(cv, X, y, ax, n_splits, title, cmap_cv):
     return ax, cs, ls
 
 
+# Visualizing cross-validation - plot class label
 def plot_cv(cv, X, y, n_splits, title):
-    print("Visualizing cross-validation behavior")
     fig, ax = plt.subplots()
     cmap_cv = plt.cm.coolwarm
     ax, cs, ls = plot_cv_indices(cv, X, y, ax, n_splits, title, cmap_cv)
@@ -315,12 +333,15 @@ def plot_cv(cv, X, y, n_splits, title):
     plt.show()
 
 
+# Plot feature importances to select features
 def plot_feature_importance(type, model, X_test, y_test, label, title):
+    # feature importances
     if (type == 'f'):
         importances = model.feature_importances_
         sorted_idx = importances.argsort()
         bars = plt.barh(range(len(sorted_idx)), importances[sorted_idx],
                         align='edge', color='lightskyblue')
+    # permutation importances
     if (type == 'p'):
         perm_importances = permutation_importance(model, X_test, y_test)
         sorted_idx = perm_importances.importances_mean.argsort()
@@ -334,25 +355,18 @@ def plot_feature_importance(type, model, X_test, y_test, label, title):
     plt.show()
 
 
-def plot_all_feature_importances(tscv, X, y, model, features, title):
-    i = 0
-    for train_index, test_index in tscv.split(X):
-        i += 1
-        if (i == 7):
-            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-            model.fit(X_train, y_train)
+# Generate all feature importances
+def plot_all_feature_importances(X_test, y_test, model, features, title):
+    # # feature importances
+    # plot_feature_importance('f', model, X_test, y_test,
+    #                         'Feature Importance', title)
 
-            # # feature importances
-            # plot_feature_importance('f', model, X_test, y_test,
-            #                         'Feature Importance', title)
+    # # permutation importances
+    # plot_feature_importance('p', model, X_test, y_test,
+    #                         'Permutation Importance', title)
 
-            # # permutation importances
-            # plot_feature_importance('p', model, X_test, y_test,
-            #                         'Permutation Importance', title)
-
-            # shap values
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X_test)
-            shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=len(
-                features), class_names=model.classes_)
+    # shap values
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_test)
+    shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=len(
+        features), class_names=model.classes_)

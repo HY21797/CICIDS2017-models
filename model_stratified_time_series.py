@@ -4,7 +4,11 @@ import os
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
-from functions import print_versions, sort_files, process_data, generate_new_df, multiclass_cross_validation, plot_multiclass_results, binary_cross_validation, plot_cv, plot_all_feature_importances
+from functions import print_versions, sort_files, process_data
+from functions import generate_new_df, multiclass_cross_validation
+from functions import plot_multiclass_results, binary_cross_validation
+from functions import plot_cv, plot_all_feature_importances, hp_tuning
+from functions import binary_time_cross_validation, get_features_without_repeat
 
 print_versions()
 
@@ -22,29 +26,51 @@ for x in range(file_number):
     df = pd.concat([df, dfs[x]])
 df = process_data(df)
 
-# Define the features used by the classifier
-features = df.columns[:-1]
+
+# print(len(df)) #2445463
+# print(len(df[df[' Label'] == 'BENIGN']))  # 2271320
+# print(len(df[df[' Label'] == 'PortScan']))  # 158804
+# print(len(df[df[' Label'] == 'Patator']))  # 13832
+# print(len(df[df[' Label'] == 'Brute Force']))  # 1507
+
+
 # Stratified the data
 new_df = generate_new_df(df, file_number)
+
+
+# threshold: 0.01
+# 32 features
+features = pd.Index(['PSH Flag Count', 'Total Length of Fwd Packets', 'Packet Length Mean',
+                     'Init_Win_bytes_forward', 'Packet Length Variance', 'Packet Length Std',
+                     'Avg Bwd Segment Size', 'Average Packet Size', 'Bwd Packets/s',
+                     'min_seg_size_forward', 'Flow Bytes/s', 'Subflow Fwd Bytes',
+                     'Bwd Packet Length Min', 'Total Length of Bwd Packets',
+                     'Fwd Packet Length Max', 'Destination Port', 'Bwd Packet Length Mean',
+                     'Init_Win_bytes_backward', 'Total Fwd Packets', 'Flow IAT Max',
+                     'ACK Flag Count', 'Fwd Header Length', 'Flow Duration',
+                     'Subflow Fwd Packets', 'Subflow Bwd Bytes', 'Avg Fwd Segment Size',
+                     'Max Packet Length', 'Fwd Packet Length Mean', 'Bwd Header Length',
+                     'Fwd IAT Min', 'Fwd IAT Max', 'Bwd Packet Length Max'],
+                    dtype='object')
 
 X = new_df[features]
 y = new_df['Label']
 labels = ['PortScan', 'Patator', 'Brute Force']
-multi_model = RandomForestClassifier(n_jobs=-2)
+tscv = TimeSeriesSplit(n_splits=file_number-1,
+                       test_size=round(len(new_df)/file_number))
 
-# tscv = TimeSeriesSplit(n_splits=file_number-1,
-#                        test_size=round(len(new_df)/file_number))
+print("Visualizing cross-validation behavior for the multiclass model")
+plot_cv(tscv, X, y, file_number-1,
+        'Stratified Time Series Split - Multiclass Classifier')
 
-# print("Visualizing cross-validation behavior for the multiclass model")
-# plot_cv(tscv, X, y, file_number-1,
-#         'Stratified Time Series Split - Multiclass Classifier')
+multi_model = RandomForestClassifier(n_jobs=-1, random_state=1)
 
-# print("Stratified time series cross validation for the multiclass model")
-# results = multiclass_cross_validation(
-#     multi_model, tscv.split(X), X, y, labels)
-# # [r1, p1, r2, p2, count_1, accuracy_scores, f1_scores]
-# suptitle = 'Stratified Time Series Cross Validation'
-# plot_multiclass_results(results, labels, suptitle)
+print("Stratified time series cross validation for the multiclass model")
+results = multiclass_cross_validation(
+    multi_model, tscv.split(X), X, y, labels)
+# [r1, p1, r2, p2, count_1, accuracy_scores, f1_scores]
+suptitle = 'Stratified Time Series Cross Validation'
+plot_multiclass_results(results, labels, suptitle)
 
 print("Training the multiclass classifier")
 X_train, X_test, y_train, y_test = train_test_split(
@@ -56,26 +82,126 @@ plot_all_feature_importances(
     X_test, y_test, multi_model, features, 'Multiclass Classifier')
 
 
+# threshold: 0.015
+# 27 features
+features2 = pd.Index(['PSH Flag Count', 'Packet Length Variance',
+                      'Total Length of Fwd Packets', 'Packet Length Mean',
+                      'Packet Length Std', 'min_seg_size_forward', 'Init_Win_bytes_forward',
+                      'Bwd Packets/s', 'Avg Bwd Segment Size', 'Bwd Packet Length Mean',
+                      'Flow Bytes/s', 'Fwd Packet Length Max', 'Bwd Packet Length Min',
+                      'Destination Port', 'Total Length of Bwd Packets', 'Subflow Fwd Bytes',
+                      'Average Packet Size', 'ACK Flag Count', 'Subflow Bwd Bytes',
+                      'Total Fwd Packets', 'Init_Win_bytes_backward', 'Flow IAT Max',
+                      'Bwd Header Length', 'Avg Fwd Segment Size', 'Flow Duration',
+                      'Fwd IAT Mean', 'Max Packet Length'],
+                     dtype='object')
+
 new_df['GT'] = np.where(new_df['Label'] == 'BENIGN', 'Benign', 'Malicious')
+X_binary = new_df[features2]
 y_binary = new_df['GT']
-binary_model = RandomForestClassifier(n_jobs=-2)
+tscv2 = TimeSeriesSplit(n_splits=file_number-1,
+                        test_size=round(len(new_df)/file_number))
 
-# tscv2 = TimeSeriesSplit(n_splits=file_number-1,
-#                         test_size=round(len(new_df)/file_number))
+print("Visualizing cross-validation behavior for the binary model")
+plot_cv(tscv2, X_binary, y_binary, file_number-1,
+        'Stratified Time Series Split - Binary Classifier')
 
-# print("Visualizing cross-validation behavior for the binary model")
-# plot_cv(tscv2, X, y_binary, file_number-1,
-#         'Stratified Time Series Split - Multiclass Classifier')
+binary_model = RandomForestClassifier(n_jobs=-1, random_state=1)
 
-# print("Stratified time series cross validation for the binary model")
-# suptitle2 = "Stratified Time Series Cross Validation"
-# binary_cross_validation(binary_model, tscv2.split(X), X, y_binary, suptitle2)
+print("Stratified time series cross validation for the binary model")
+suptitle2 = "Stratified Time Series Cross Validation"
+binary_cross_validation(binary_model, tscv2.split(
+    X_binary), X_binary, y_binary, suptitle2)
 
 print("Training the binary classifier")
 X_train2, X_test2, y_train2, y_test2 = train_test_split(
-    X, y_binary, test_size=round(len(new_df)/file_number), shuffle=False)
+    X_binary, y_binary, test_size=round(len(new_df)/file_number), shuffle=False)
 binary_model.fit(X_train2, y_train2)
 
 print("Plotting the feature importances for the binary classifier")
 plot_all_feature_importances(
-    X_test2, y_test2, binary_model, features, 'Binary Classifier')
+    X_test2, y_test2, binary_model, features2, 'Binary Classifier')
+
+
+# # Remove 'Fwd Header Length.1'(Repeat)
+# features = get_features_without_repeat()
+
+# # threshold: 0.005
+# # 39 features
+# features = pd.Index(['PSH Flag Count', 'Total Length of Fwd Packets', 'Packet Length Mean',
+#                      'Init_Win_bytes_forward', 'Packet Length Variance', 'Packet Length Std',
+#                      'Avg Bwd Segment Size', 'Average Packet Size', 'Bwd Packets/s',
+#                      'min_seg_size_forward', 'Flow Bytes/s', 'Subflow Fwd Bytes',
+#                      'Bwd Packet Length Min', 'Total Length of Bwd Packets',
+#                      'Fwd Packet Length Max', 'Destination Port', 'Bwd Packet Length Mean',
+#                      'Init_Win_bytes_backward', 'Total Fwd Packets', 'Flow IAT Max',
+#                      'ACK Flag Count', 'Fwd Header Length', 'Flow Duration',
+#                      'Subflow Fwd Packets', 'Subflow Bwd Bytes', 'Avg Fwd Segment Size',
+#                      'Max Packet Length', 'Fwd Packet Length Mean', 'Bwd Header Length',
+#                      'Fwd IAT Min', 'Fwd IAT Max', 'Bwd Packet Length Max', 'Fwd IAT Mean',
+#                      'Fwd Packets/s', 'Min Packet Length', 'Fwd IAT Total',
+#                      'Total Backward Packets', 'Flow Packets/s', 'Flow IAT Std'],
+#                     dtype='object')
+
+# # threshold: 0.015
+# # 24 features
+# features = pd.Index(['PSH Flag Count', 'Total Length of Fwd Packets', 'Packet Length Mean',
+#                      'Init_Win_bytes_forward', 'Packet Length Variance', 'Packet Length Std',
+#                      'Avg Bwd Segment Size', 'Average Packet Size', 'Bwd Packets/s',
+#                      'min_seg_size_forward', 'Flow Bytes/s', 'Subflow Fwd Bytes',
+#                      'Bwd Packet Length Min', 'Total Length of Bwd Packets',
+#                      'Fwd Packet Length Max', 'Destination Port', 'Bwd Packet Length Mean',
+#                      'Init_Win_bytes_backward', 'Total Fwd Packets', 'Flow IAT Max',
+#                      'ACK Flag Count', 'Fwd Header Length', 'Flow Duration',
+#                      'Subflow Fwd Packets'],
+#                     dtype='object')
+
+
+# # Remove 'Fwd Header Length.1'(Repeat)
+# features2 = get_features_without_repeat()
+
+# # threshold: 0.005
+# # 39 features
+# features2 = pd.Index(['PSH Flag Count', 'Packet Length Variance',
+#                       'Total Length of Fwd Packets', 'Packet Length Mean',
+#                       'Packet Length Std', 'min_seg_size_forward', 'Init_Win_bytes_forward',
+#                       'Bwd Packets/s', 'Avg Bwd Segment Size', 'Bwd Packet Length Mean',
+#                       'Flow Bytes/s', 'Fwd Packet Length Max', 'Bwd Packet Length Min',
+#                       'Destination Port', 'Total Length of Bwd Packets', 'Subflow Fwd Bytes',
+#                       'Average Packet Size', 'ACK Flag Count', 'Subflow Bwd Bytes',
+#                       'Total Fwd Packets', 'Init_Win_bytes_backward', 'Flow IAT Max',
+#                       'Bwd Header Length', 'Avg Fwd Segment Size', 'Flow Duration',
+#                       'Fwd IAT Mean', 'Max Packet Length', 'Subflow Fwd Packets',
+#                       'Bwd Packet Length Max', 'Fwd Packet Length Mean', 'Fwd IAT Min',
+#                       'Fwd IAT Max', 'Subflow Bwd Packets', 'Fwd IAT Total', 'Flow IAT Std',
+#                       'Min Packet Length', 'Fwd Packets/s', 'act_data_pkt_fwd',
+#                       'Fwd Header Length'],
+#                      dtype='object')
+
+# # threshold: 0.01
+# # 33 features
+# features2 = pd.Index(['PSH Flag Count', 'Packet Length Variance',
+#                       'Total Length of Fwd Packets', 'Packet Length Mean',
+#                       'Packet Length Std', 'min_seg_size_forward', 'Init_Win_bytes_forward',
+#                       'Bwd Packets/s', 'Avg Bwd Segment Size', 'Bwd Packet Length Mean',
+#                       'Flow Bytes/s', 'Fwd Packet Length Max', 'Bwd Packet Length Min',
+#                       'Destination Port', 'Total Length of Bwd Packets', 'Subflow Fwd Bytes',
+#                       'Average Packet Size', 'ACK Flag Count', 'Subflow Bwd Bytes',
+#                       'Total Fwd Packets', 'Init_Win_bytes_backward', 'Flow IAT Max',
+#                       'Bwd Header Length', 'Avg Fwd Segment Size', 'Flow Duration',
+#                       'Fwd IAT Mean', 'Max Packet Length', 'Subflow Fwd Packets',
+#                       'Bwd Packet Length Max', 'Fwd Packet Length Mean', 'Fwd IAT Min',
+#                       'Fwd IAT Max', 'Subflow Bwd Packets'],
+#                      dtype='object')
+
+# # threshold: 0.02
+# # 20 features
+# features2 = pd.Index(['PSH Flag Count', 'Packet Length Variance',
+#                       'Total Length of Fwd Packets', 'Packet Length Mean',
+#                       'Packet Length Std', 'min_seg_size_forward', 'Init_Win_bytes_forward',
+#                       'Bwd Packets/s', 'Avg Bwd Segment Size', 'Bwd Packet Length Mean',
+#                       'Flow Bytes/s', 'Fwd Packet Length Max', 'Bwd Packet Length Min',
+#                       'Destination Port', 'Total Length of Bwd Packets', 'Subflow Fwd Bytes',
+#                       'Average Packet Size', 'ACK Flag Count', 'Subflow Bwd Bytes',
+#                       'Total Fwd Packets'],
+#                      dtype='object')

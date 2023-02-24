@@ -5,9 +5,11 @@ import sklearn
 import shap
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-from sklearn.inspection import permutation_importance
-from sklearn.metrics import accuracy_score, fbeta_score, precision_recall_curve, average_precision_score
 from matplotlib.patches import Patch
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+from sklearn.metrics import accuracy_score, fbeta_score
+from sklearn.metrics import precision_recall_curve, average_precision_score
 
 
 def print_versions():
@@ -71,6 +73,37 @@ def generate_new_df(df, file_number):
         new_df = pd.concat([new_df, b4[i * range4: i * range4 + range4]])
     print("Finish stratifing data")
     return new_df
+
+
+def get_features_without_repeat():
+    # Remove 'Fwd Header Length.1'(Repeat)
+    features = pd.Index(['Destination Port', 'Flow Duration', 'Total Fwd Packets',
+                         'Total Backward Packets', 'Total Length of Fwd Packets',
+                         'Total Length of Bwd Packets', 'Fwd Packet Length Max',
+                         'Fwd Packet Length Min', 'Fwd Packet Length Mean',
+                         'Fwd Packet Length Std', 'Bwd Packet Length Max',
+                         'Bwd Packet Length Min', 'Bwd Packet Length Mean',
+                         'Bwd Packet Length Std', 'Flow Bytes/s', 'Flow Packets/s',
+                         'Flow IAT Mean', 'Flow IAT Std', 'Flow IAT Max', 'Flow IAT Min',
+                         'Fwd IAT Total', 'Fwd IAT Mean', 'Fwd IAT Std', 'Fwd IAT Max',
+                         'Fwd IAT Min', 'Bwd IAT Total', 'Bwd IAT Mean', 'Bwd IAT Std',
+                         'Bwd IAT Max', 'Bwd IAT Min', 'Fwd PSH Flags', 'Bwd PSH Flags',
+                         'Fwd URG Flags', 'Bwd URG Flags', 'Fwd Header Length',
+                         'Bwd Header Length', 'Fwd Packets/s', 'Bwd Packets/s',
+                         'Min Packet Length', 'Max Packet Length', 'Packet Length Mean',
+                         'Packet Length Std', 'Packet Length Variance', 'FIN Flag Count',
+                         'SYN Flag Count', 'RST Flag Count', 'PSH Flag Count', 'ACK Flag Count',
+                         'URG Flag Count', 'CWE Flag Count', 'ECE Flag Count', 'Down/Up Ratio',
+                         'Average Packet Size', 'Avg Fwd Segment Size', 'Avg Bwd Segment Size',
+                         'Fwd Avg Bytes/Bulk', 'Fwd Avg Packets/Bulk', 'Fwd Avg Bulk Rate',
+                         'Bwd Avg Bytes/Bulk', 'Bwd Avg Packets/Bulk', 'Bwd Avg Bulk Rate',
+                         'Subflow Fwd Packets', 'Subflow Fwd Bytes', 'Subflow Bwd Packets',
+                         'Subflow Bwd Bytes', 'Init_Win_bytes_forward',
+                         'Init_Win_bytes_backward', 'act_data_pkt_fwd', 'min_seg_size_forward',
+                         'Active Mean', 'Active Std', 'Active Max', 'Active Min', 'Idle Mean',
+                         'Idle Std', 'Idle Max', 'Idle Min'],
+                        dtype='object')
+    return features
 
 
 # Calculate the precision and recall - micro average
@@ -179,7 +212,7 @@ def plot_multiclass_results(results, labels, suptitle):
 
 
 # For time series cross validation only
-def binary_time_cross_validation(binary_model, split, X, y_binary):
+def binary_time_cross_validation(binary_model, split, X_binary, y_binary):
     accuracy_scores = []
     f1_scores = []
     p = []
@@ -187,7 +220,7 @@ def binary_time_cross_validation(binary_model, split, X, y_binary):
     counts = []
     count = 0
     for train_index, test_index in split:
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        X_train, X_test = X_binary.iloc[train_index], X_binary.iloc[test_index]
         y_train, y_test = y_binary.iloc[train_index], y_binary.iloc[test_index]
         binary_model.fit(X_train, y_train)
         y_pred = binary_model.predict(X_test)
@@ -225,7 +258,7 @@ def plot_binary_results(results):
     plt.show()
 
 
-def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
+def binary_cross_validation(binary_model, split, X_binary, y_binary, suptitle):
     accuracy_scores = []
     f1_scores = []
     y_real = []
@@ -234,7 +267,7 @@ def binary_cross_validation(binary_model, split, X, y_binary, suptitle):
     count = 0
     # Stratified cross validation
     for train_index, test_index in split:
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        X_train, X_test = X_binary.iloc[train_index], X_binary.iloc[test_index]
         y_train, y_test = y_binary.iloc[train_index], y_binary.iloc[test_index]
         binary_model.fit(X_train, y_train)
         y_pred = binary_model.predict(X_test)
@@ -357,9 +390,9 @@ def plot_feature_importance(type, model, X_test, y_test, label, title):
 
 # Generate all feature importances
 def plot_all_feature_importances(X_test, y_test, model, features, title):
-    # # feature importances
-    # plot_feature_importance('f', model, X_test, y_test,
-    #                         'Feature Importance', title)
+    # feature importances
+    plot_feature_importance('f', model, X_test, y_test,
+                            'Feature Importance', title)
 
     # # permutation importances
     # plot_feature_importance('p', model, X_test, y_test,
@@ -370,3 +403,37 @@ def plot_all_feature_importances(X_test, y_test, model, features, title):
     shap_values = explainer.shap_values(X_test)
     shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=len(
         features), class_names=model.classes_)
+
+
+# Stratified time series cross validation for hyperparameter tuning
+def hp_cross_validation(model, tscv, X, y):
+    f1_scores = []
+    for train_index, test_index in tscv.split(X):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        f1_scores.append(fbeta_score(
+            y_test, y_pred, average='macro', beta=1.0))
+    return sum(f1_scores)/len(f1_scores)
+
+
+# hyperparameter tuning
+def hp_tuning(tscv, X, y, title):
+    # n_estimators : (1, 201, 10)
+
+    # n_estimators -> criterion -> max_depth ->
+    # min_samples_split -> min_samples_leaf -> max_features
+    f1_scores = []
+    for i in range(1, 201, 10):
+        model = RandomForestClassifier(
+            n_estimators=i, n_jobs=-1, random_state=1)
+        f1_score = hp_cross_validation(model, tscv, X, y)
+        f1_scores.append(f1_score)
+        print('Finish ' + str(i/10))
+    f1_max = max(f1_scores)
+    x = np.arange(1, 201, 10)
+    plt.plot(x, f1_scores, 'r-', label='max f1-score： {max:.6f} n_estimators： {n})'.format(
+        max=f1_max, n=f1_scores.index(f1_max)*10+1))
+    plt.title(title)
+    plt.show()

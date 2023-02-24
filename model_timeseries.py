@@ -36,8 +36,9 @@ tscv = TimeSeriesSplit(n_splits=file_number-1,
 print("Visualizing cross-validation behavior for the multiclass model")
 plot_cv(tscv, X, y, file_number-1, 'Time Series Split - Multiclass Classifier')
 
-print("Time series cross validation for the multiclass model")
 multi_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+
+print("Time series cross validation for the multiclass model")
 results1 = multiclass_cross_validation(
     multi_model, tscv.split(X), X, y, labels)
 # [r1, p1, r2, p2, counts, accuracy_scores, f1_scores]
@@ -54,8 +55,9 @@ print("Visualizing cross-validation behavior for the binary model")
 plot_cv(tscv2, X, y_binary, file_number-1,
         'Time Series Split - Binary Classifier')
 
-print("Time series cross validation for the binary model")
 binary_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+
+print("Time series cross validation for the binary model")
 results2 = binary_time_cross_validation(
     binary_model, tscv2.split(X), X, y_binary)
 # [r, p, counts, accuracy_scores, f1_scores]

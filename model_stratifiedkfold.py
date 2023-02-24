@@ -33,8 +33,9 @@ print("Visualizing cross-validation behavior for the multiclass model")
 plot_cv(skf, X, y, file_number-1,
         'Stratified K-fold Split - Multiclass Classifier')
 
-print("Stratified k-fold cross validation for the multiclass model")
 multi_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+
+print("Stratified k-fold cross validation for the multiclass model")
 results = multiclass_cross_validation(
     multi_model, skf.split(X, y), X, y, labels)
 # [r1, p1, r2, p2, count_1, accuracy_scores, f1_scores]
@@ -50,8 +51,9 @@ print("Visualizing cross-validation behavior for the binary model")
 plot_cv(skf2, X, y_binary, file_number-1,
         'Stratified K-fold Split - Binary Classifier')
 
-print("Stratified k-fold cross validation for the binary model")
 binary_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+
+print("Stratified k-fold cross validation for the binary model")
 suptitle2 = "Stratified K-fold Cross Validation"
 binary_cross_validation(binary_model, skf2.split(
     X, y_binary), X, y_binary, suptitle2)

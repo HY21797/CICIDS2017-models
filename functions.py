@@ -367,17 +367,19 @@ def plot_cv(cv, X, y, n_splits, title):
 
 
 # Plot feature importances to select features
-def plot_feature_importance(type, model, X_test, y_test, label, title):
+def plot_feature_importance(type, model, X_test, y_test, label, title, features):
     # feature importances
     if (type == 'f'):
         importances = model.feature_importances_
         sorted_idx = importances.argsort()
+        print(features[sorted_idx])
         bars = plt.barh(range(len(sorted_idx)), importances[sorted_idx],
                         align='edge', color='lightskyblue')
     # permutation importances
     if (type == 'p'):
         perm_importances = permutation_importance(model, X_test, y_test)
         sorted_idx = perm_importances.importances_mean.argsort()
+        print(features[sorted_idx])
         bars = plt.barh(range(len(sorted_idx)), perm_importances.importances_mean[sorted_idx],
                         align='edge', color='lightskyblue')
     plt.bar_label(bars, padding=10, color='blue', fontsize=7)
@@ -392,11 +394,11 @@ def plot_feature_importance(type, model, X_test, y_test, label, title):
 def plot_all_feature_importances(X_test, y_test, model, features, title):
     # feature importances
     plot_feature_importance('f', model, X_test, y_test,
-                            'Feature Importance', title)
+                            'Feature Importance', title, features)
 
     # # permutation importances
     # plot_feature_importance('p', model, X_test, y_test,
-    #                         'Permutation Importance', title)
+    #                         'Permutation Importance', title, features)
 
     # shap values
     explainer = shap.TreeExplainer(model)
@@ -418,22 +420,65 @@ def hp_cross_validation(model, tscv, X, y):
     return sum(f1_scores)/len(f1_scores)
 
 
-# hyperparameter tuning
-def hp_tuning(tscv, X, y, title):
-    # n_estimators : (1, 201, 10)
-
-    # n_estimators -> criterion -> max_depth ->
-    # min_samples_split -> min_samples_leaf -> max_features
-    f1_scores = []
-    for i in range(1, 201, 10):
+# Hyperparameter tuning for criterion
+def hp_criterion(tscv, X, y, n):
+    for i in ['gini', 'entropy']:
         model = RandomForestClassifier(
-            n_estimators=i, n_jobs=-1, random_state=1)
-        f1_score = hp_cross_validation(model, tscv, X, y)
-        f1_scores.append(f1_score)
-        print('Finish ' + str(i/10))
-    f1_max = max(f1_scores)
-    x = np.arange(1, 201, 10)
-    plt.plot(x, f1_scores, 'r-', label='max f1-score： {max:.6f} n_estimators： {n})'.format(
-        max=f1_max, n=f1_scores.index(f1_max)*10+1))
-    plt.title(title)
+            n_estimators=n, criterion=i, n_jobs=-1, random_state=1)
+        score = hp_cross_validation(model, tscv, X, y)
+        print('%s: %.5f' % (i, score))
+
+
+# Plot the hyperparameter tuning graph
+def plot_hp(scores, param, suptitle):
+    scores = np.array(scores)
+    max_score = np.where(scores == np.max(scores[:, 1]))[0][0]
+    plt.plot(scores[:, 0], scores[:, 1])
+    plt.title('max score=%6f      %s=%s' %
+              (scores[max_score][1], param, scores[max_score][0]))
+    plt.suptitle(suptitle)
     plt.show()
+
+
+# Hyperparameter tuning for the multiclass model
+def multiclass_hp_tuning(tscv, X, y):
+    # n_estimators: (10, 201, 10) -> 60
+    # n_estimators: (51, 70) -> 59
+    # criterion: ['gini': 0.9847, 'entropy': 0.9846] -> gini
+    # hp_criterion(tscv, X, y, 59)
+    # max_depth: (10, 29, 3) -> 22
+    # max_depth: (20, 25) -> 22
+    # min_samples_split (10, 21) -> 13
+    f1_scores = []
+    for i in range(10, 21):
+        model = RandomForestClassifier(n_estimators=59, criterion='gini', max_depth=22,
+                                       min_samples_split=13, n_jobs=-1, random_state=1)
+        f1_score = hp_cross_validation(model, tscv, X, y)
+        f1_scores.append([i, f1_score])
+    plot_hp(f1_scores, 'min_samples_split', 'Multiclass Classifier')
+    # min_samples_leaf (1, 11) -> 1
+    # max_features (1, 33, 8) -> 1
+    # max_features (1, 9) -> 5
+
+
+# Hyperparameter tuning for the binary model
+def binary_hp_tuning(tscv, X, y):
+    # n_estimators: (10, 201, 10) -> 160
+    # n_estimators: (151, 170) -> 161
+    # criterion: ['gini': 0.99560, 'entropy': 0.99563] -> entropy
+    # hp_criterion(tscv, X, y, 161)
+    # max_depth: (50, 151, 10) -> 90
+    # max_depth: (81, 100) -> 81
+    # min_samples_split (10, 101, 10) -> 20
+    # min_samples_split (11, 30) -> 18
+    f1_scores = []
+    for i in range(11, 30):
+        model = RandomForestClassifier(n_estimators=161, criterion='entropy', max_depth=81,
+                                       min_samples_split=18, n_jobs=-1, random_state=1)
+        f1_score = hp_cross_validation(model, tscv, X, y)
+        f1_scores.append([i, f1_score])
+        print('Finish ' + str(i))
+    plot_hp(f1_scores, 'min_samples_split', 'Binary Classifier')
+    # min_samples_leaf (1, 11) -> 1
+    # max_features (1, 28, 5) -> 16
+    # max_features (12, 21) -> 12

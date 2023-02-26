@@ -7,8 +7,9 @@ from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from functions import print_versions, sort_files, process_data
 from functions import generate_new_df, multiclass_cross_validation
 from functions import plot_multiclass_results, binary_cross_validation
-from functions import plot_cv, plot_all_feature_importances, hp_tuning
+from functions import plot_cv, plot_all_feature_importances
 from functions import binary_time_cross_validation, get_features_without_repeat
+from functions import multiclass_hp_tuning, binary_hp_tuning
 
 print_versions()
 
@@ -63,7 +64,13 @@ print("Visualizing cross-validation behavior for the multiclass model")
 plot_cv(tscv, X, y, file_number-1,
         'Stratified Time Series Split - Multiclass Classifier')
 
-multi_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+# multi_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+# print('Hyperparameter tuning for the multiclass classifier')
+# multiclass_hp_tuning(tscv, X, y)
+
+multi_model = RandomForestClassifier(n_estimators=59, criterion='gini', max_depth=22,
+                                     min_samples_split=13, min_samples_leaf=1,
+                                     max_features=5, n_jobs=-1, random_state=1)
 
 print("Stratified time series cross validation for the multiclass model")
 results = multiclass_cross_validation(
@@ -106,7 +113,12 @@ print("Visualizing cross-validation behavior for the binary model")
 plot_cv(tscv2, X_binary, y_binary, file_number-1,
         'Stratified Time Series Split - Binary Classifier')
 
-binary_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+# binary_model = RandomForestClassifier(n_jobs=-1, random_state=1)
+# print('Hyperparameter tuning for the binary classifier')
+# binary_hp_tuning(tscv2, X_binary, y_binary)
+
+binary_model = RandomForestClassifier(n_estimators=161, criterion='entropy', max_depth=81,
+                                      min_samples_split=18, n_jobs=-1, random_state=1)
 
 print("Stratified time series cross validation for the binary model")
 suptitle2 = "Stratified Time Series Cross Validation"

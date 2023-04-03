@@ -33,8 +33,6 @@ features = pd.Index(['PSH Flag Count', 'Total Length of Fwd Packets', 'Packet Le
 
 X = new_df[features]
 y = new_df['Label']
-tscv = TimeSeriesSplit(n_splits=file_number-1,
-                       test_size=round(len(new_df)/file_number))
 
 # print("Visualizing cross-validation behavior for the multiclass model")
 # tscv = TimeSeriesSplit(n_splits=file_number-1,
@@ -99,8 +97,8 @@ cross_validation(binary_model, tscv2, X_train2, y_train2, 'Binary Classifier')
 print('Hyperparameter tuning for the binary classifier')
 binary_hp_tuning(tscv2, X_train2, y_train2)
 
-model = RandomForestClassifier(n_estimators=159, criterion='entropy', max_depth=67,
-                               min_samples_split=18, n_jobs=-1, random_state=1)
+binary_model = RandomForestClassifier(n_estimators=159, criterion='entropy', max_depth=67,
+                                      min_samples_split=18, n_jobs=-1, random_state=1)
 
 
 # Multiclass classifier

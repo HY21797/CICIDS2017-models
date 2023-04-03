@@ -1,0 +1,3 @@
+MachineLearningCVE/Monday-WorkingHours.pcap_ISCX.csv filter=lfs diff=lfs merge=lfs -text
+MachineLearningCVE/Tuesday-WorkingHours.pcap_ISCX.csv filter=lfs diff=lfs merge=lfs -text
+MachineLearningCVE/Wednesday-workingHours.pcap_ISCX.csv filter=lfs diff=lfs merge=lfs -text

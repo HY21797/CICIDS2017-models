@@ -41,7 +41,8 @@ def sort_files(f):
 
 
 def reading_files():
-    # Reading CSV files, and merging all of them into a single DataFrame
+    # Reading CSV files, and merging all of them into a single
+    # Downloading the dataset from https://www.unb.ca/cic/datasets/ids-2017.html
     file_number = 0
     root_folder = os.path.dirname(
         os.path.abspath(__file__)) + "/MachineLearningCVE/"
@@ -49,31 +50,41 @@ def reading_files():
     dfs = [None] * 8
     for f in os.listdir(root_folder):
         file_number = file_number + 1
-        print("Reading: ", f)
-        dfs[sort_files(f)] = pd.read_csv(root_folder + f)
+        dfs[sort_files(f)] = f
     for x in range(file_number):
-        df = pd.concat([df, dfs[x]])
+        print("Reading: ", dfs[x])
+        df = pd.concat([df, pd.read_csv(root_folder + dfs[x])])
     return df, file_number
 
 
 def process_data(df):
-    # QUICK PREPROCESSING.
-    # Some classifiers do not like "infinite" (inf) or "null" (NaN) values.
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    df.dropna(inplace=True)
-    df.columns = df.columns.str.lstrip()
+    # print(len(df))  # 2830743
 
     # Label all Patator attacks as 'Patator', all Brute Force attacks as 'Brute Force'
     # df = df[df['Label'].str.contains("BENIGN|PortScan|Patator|Brute")==True]
+    df.columns = df.columns.str.lstrip()
     df['Label'] = df['Label'].replace(
         ['FTP-Patator', 'SSH-Patator'], 'Patator')
     df.loc[df['Label'].str.contains('Brute'), 'Label'] = 'Brute Force'
     df = df[df['Label'].isin(['BENIGN', 'PortScan', 'Patator', 'Brute Force'])]
-    # print(len(df)) #2445463
-    # print(len(df[df[' Label'] == 'BENIGN']))  # 2271320
-    # print(len(df[df[' Label'] == 'PortScan']))  # 158804
-    # print(len(df[df[' Label'] == 'Patator']))  # 13832
-    # print(len(df[df[' Label'] == 'Brute Force']))  # 1507
+
+    # print(len(df))  # 2447369
+    # print(len(df[df['Label'] == 'BENIGN']))  # 2273097
+    # print(len(df[df['Label'] == 'PortScan']))  # 158930
+    # print(len(df[df['Label'] == 'Patator']))  # 13835
+    # print(len(df[df['Label'] == 'Brute Force']))  # 1507
+
+    # QUICK PREPROCESSING.
+    # Some classifiers do not like "infinite" (inf) or "null" (NaN) values.
+    # https://github.com/hihey54/dummy-ML_NIDS/blob/main/code/CICIDS17_example.ipynb
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.dropna(inplace=True)
+
+    # print(len(df))  # 2445463
+    # print(len(df[df['Label'] == 'BENIGN']))  # 2271320
+    # print(len(df[df['Label'] == 'PortScan']))  # 158804
+    # print(len(df[df['Label'] == 'Patator']))  # 13832
+    # print(len(df[df['Label'] == 'Brute Force']))  # 1507
     return df
 
 
@@ -194,13 +205,16 @@ def plot_all_feature_importances(X_test, y_test, model, features, title):
     #                         'Permutation Importance', title, features)
 
     # shap values
-    # explainer = shap.TreeExplainer(model)
-    # shap_values = explainer.shap_values(X_test)
-    # shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=len(
-    #     features), class_names=model.classes_)
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_test)
+    # shap.force_plot(
+    #     explainer.expected_value[0], shap_values[0], X_test.iloc[0:])
+    shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=len(
+        features), class_names=model.classes_)
 
 
 # Visualizing cross-validation
+# https://scikit-learn.org/stable/auto_examples/model_selection/plot_cv_indices.html
 def plot_cv_indices(cv, X, y, ax, n_splits, title):
     lw = 10
     length = 0
@@ -289,9 +303,8 @@ def cross_validation(model, tscv, X, y, suptitle):
     plt.title(suptitle)
     plt.show()
 
+
 # Stratified time series cross validation for hyperparameter tuning
-
-
 def hp_cross_validation(model, tscv, X, y):
     f1_scores = []
     for train_index, test_index in tscv.split(X):
@@ -360,3 +373,103 @@ def binary_hp_tuning(tscv, X, y):
         f1_scores.append([i, f1_score])
         print('Finish ' + str(i) + " " + str(f1_score))
     plot_hp(f1_scores, 'min_samples_split', 'Binary Classifier')
+
+
+# Append files in time order
+def sort_files_2018(f):
+    if (f.split("-")[1] == "14"):
+        return 0
+    if (f.split("-")[1] == "15"):
+        return 1
+    if (f.split("-")[1] == "16"):
+        return 2
+    if (f.split("-")[1] == "20"):
+        return 3
+    if (f.split("-")[1] == "21"):
+        return 4
+    if (f.split("-")[1] == "22"):
+        return 5
+    if (f.split("-")[1] == "23"):
+        return 6
+    # Remove Wednesday-28-02-2018_TrafficForML_CICFlowMeter.csv
+    if (f.split("-")[1] == "28"):
+        return 8
+    # Remove Thursday-01-03-2018_TrafficForML_CICFlowMeter.csv
+    if (f.split("-")[1] == "01"):
+        return 9
+    return 7
+
+
+def reading_processing_2018():
+    # Reading CSV files, and merging all of them into a single DataFrame
+    # Downloading the dataset from https://www.unb.ca/cic/datasets/ids-2018.html
+    # and https://registry.opendata.aws/cse-cic-ids2018/
+    df = pd.DataFrame()
+    dfs = [None] * 10
+    root_folder = os.path.dirname(
+        os.path.abspath(__file__)) + "/CSECICIDS2018/"
+    for f in os.listdir(root_folder):
+        dfs[sort_files_2018(f)] = f
+    for x in range(len(dfs)-2):
+        print("Reading: ", dfs[x])
+        df2 = change_feature_name(pd.read_csv(
+            root_folder + dfs[x], low_memory=False))
+        # Drop "infinite" (inf) or "null" (NaN) values.
+        df2 = process_data_2018(df2)
+        df = pd.concat([df, df2], ignore_index=True)
+    return df
+
+
+# Change the features name to fit the 2017 dataset.
+def change_feature_name(df2):
+    df2['Label'] = df2['Label'].replace('Benign', 'BENIGN')
+    df2.loc[df2['Label'].str.contains('-Brute'), 'Label'] = 'Patator'
+    df2.loc[df2['Label'].str.contains('Brute Force'), 'Label'] = 'Brute Force'
+    df2 = df2[df2['Label'].isin(['BENIGN', 'Patator', 'Brute Force'])]
+    df2 = df2.drop(['Timestamp'], axis=1)
+    df2.columns = df2.columns.str.replace("Len", "Length")
+    df2.columns = df2.columns.str.replace("Dst", "Destination")
+    df2.columns = df2.columns.str.replace("Tot", "Total")
+    df2.columns = df2.columns.str.replace("Pkts", "Packets")
+    df2.columns = df2.columns.str.replace("Pkt", "Packet")
+    df2.columns = df2.columns.str.replace("Cnt", "Count")
+    df2.columns = df2.columns.str.replace("Var", "Variance")
+    df2.columns = df2.columns.str.replace("Byts", "Bytes")
+    df2 = df2.rename({'Total Bwd Packets': 'Total Backward Packets',
+                      'TotalLength Fwd Packets': 'Total Length of Fwd Packets',
+                      'TotalLength Bwd Packets': 'Total Length of Bwd Packets',
+                      'Packet Length Min': 'Min Packet Length',
+                      'Packet Length Max': 'Max Packet Length',
+                      'Packet Size Avg': 'Average Packet Size',
+                      'Fwd Seg Size Avg': 'Avg Fwd Segment Size',
+                      'Bwd Seg Size Avg': 'Avg Bwd Segment Size',
+                      'Fwd Bytes/b Avg': 'Fwd Avg Bytes/Bulk',
+                      'Fwd Packets/b Avg': 'Fwd Avg Packets/Bulk',
+                      'Fwd Blk Rate Avg': 'Fwd Avg Bulk Rate',
+                      'Bwd Bytes/b Avg': 'Bwd Avg Bytes/Bulk',
+                      'Bwd Packets/b Avg': 'Bwd Avg Packets/Bulk',
+                      'Bwd Blk Rate Avg': 'Bwd Avg Bulk Rate',
+                      'Init Fwd Win Bytes': 'Init_Win_bytes_forward',
+                      'Init Bwd Win Bytes': 'Init_Win_bytes_backward',
+                      'Fwd Act Data Packets': 'act_data_pkt_fwd',
+                      'Fwd Seg Size Min': 'min_seg_size_forward'
+                      }, axis=1)
+    return df2
+
+
+# Processing the CSECICIDS2018 dataset
+def process_data_2018(df2):
+    df2.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df2.dropna(inplace=True)
+    df2.drop_duplicates(inplace=True)
+    return df2
+
+
+def evaluation_2018(cm, labels, title):
+    cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(cm_df, annot=True, cmap="Blues", fmt='d')
+    plt.ylabel('Actual Values')
+    plt.xlabel('Predicted Values')
+    plt.title(title)
+    plt.show()
